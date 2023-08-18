@@ -1,55 +1,168 @@
-import React from 'react';
-import { SafeAreaView, StatusBar, ScrollView, StyleSheet, View } from 'react-native';
-import { Card, List, Text } from '@ui-kitten/components';
-
-const data = new Array(8).fill({
-  title: 'Item',
-});
+import React, { useState, useEffect, useRef } from 'react';
+import { SafeAreaView, Text, StatusBar, ScrollView, StyleSheet, View, Keyboard, Image } from 'react-native';
+import { Card, List, Button, Input, Icon, Layout } from '@ui-kitten/components';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 
 const Home = () => {
+  const [taskList, setTaskList] = useState([]);
+  const [editIndex, setEditIndex] = useState(-1);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+
+  useEffect(() => {
+    async function getList() {
+      try {
+        const listString = await AsyncStorage.getItem('list');
+        const list = JSON.parse(listString) || [];
+        setTaskList(list);
+      } catch (error) {
+        console.error('Error loading task list:', error);
+      }
+    }
+
+    getList();
+  }, []);
+
+  const deleteTask = async (index) => {
+    try {
+      const updatedList = taskList.filter((_, i) => i !== index);
+      await AsyncStorage.setItem('list', JSON.stringify(updatedList));
+      setTaskList(updatedList);
+      if (editIndex === index) {
+        setEditIndex(-1);
+        setEditTitle('');
+        setEditContent('');
+      }
+    } catch (error) {
+      console.error('Error deleting task:', error);
+    }
+  };
+
+  const saveEditedTask = async (index) => {
+    try {
+      const updatedList = [...taskList];
+      let date = new Date().toLocaleDateString('en-us', { weekday:"long", year:"numeric", month:"short", day:"numeric"})
+      updatedList[index] = {
+        title: editTitle,
+        content: editContent,
+        date: date
+      };
+      await AsyncStorage.setItem('list', JSON.stringify(updatedList));
+      setTaskList(updatedList);
+      setEditIndex(-1);
+      setEditTitle(''); setEditContent('');
+    } catch (error) {
+      console.error('Error editing task:', error);
+    }
+  };
+
+  const titleInputRef = useRef(null);
+
+  const enterEditMode = (index) => {
+    const selectedTask = taskList[index];
+    setEditIndex(index);
+    setEditTitle(selectedTask.title);
+    setEditContent(selectedTask.content);
+  };
+
+  const openImagePicker = async (index) => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
+
+    if (!result.cancelled) {
+      const updatedList = [...taskList];
+      updatedList[index].imageUri = result.uri;
+      await AsyncStorage.setItem('list', JSON.stringify(updatedList));
+      setTaskList(updatedList);
+    }
+  };
 
   const renderItemHeader = (headerProps, info) => (
     <View {...headerProps}>
-      <Text category='h6'>
-        {`${info.item.title} ${info.index + 1}`}
-      </Text>
+      {editIndex === info.index ? (
+        <Input
+          value={editTitle}
+          onChangeText={setEditTitle}
+          placeholder="Titulo"
+        />
+      ) : (
+        <View style={styles.rowContainer}>
+          <Text style={styles.h6Text}>{info.item.title}</Text>
+          <Text style={styles.h6Text}>{info.item.date}</Text>
+        </View>
+      )}
     </View>
   );
 
-  const renderItemFooter = (footerProps) => (
-    <Text {...footerProps}>
-      By Wikipedia
-    </Text>
+  const renderItemFooter = (footerProps, info) => (
+    <View {...footerProps}>
+      {editIndex === info.index ? (
+        <Button onPress={() => saveEditedTask(info.index)}>Guardar</Button>
+      ) : (
+        <>
+          <Layout level='1'>
+            <View style={styles.rowContainer}>
+              <View style={styles.rowDirection}>
+                <Button
+                  onPress={() => deleteTask(info.index)}
+                  appearance='ghost'
+                  status='danger'
+                  accessoryLeft={<Icon name='trash-outline'/>}
+                />
+                <Button
+                  onPress={() => enterEditMode(info.index)}
+                  appearance='ghost'
+                  status='warning'
+                  accessoryLeft={<Icon name='edit-2-outline'/>}
+                />
+              </View>
+            </View>
+          </Layout>
+        </>
+      )}
+    </View>
   );
 
   const renderItem = (info) => (
     <Card
       style={styles.item}
-      status='basic'
+      status="basic"
       header={(headerProps) => renderItemHeader(headerProps, info)}
-      footer={renderItemFooter}
+      footer={(footerProps) => renderItemFooter(footerProps, info)}
     >
-      <Text>
-        {/* eslint-disable-next-line react/no-unescaped-entities */}
-        Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's
-        standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make
-        a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting,
-        remaining essentially unchanged.
-      </Text>
+      {editIndex === info.index ? (
+        <Input
+          multiline={true}
+          textStyle={styles.inputTextStyle}
+          value={editContent}
+          onChangeText={setEditContent}
+          placeholder="Contenido de la tarea"
+        />
+      ) : (
+        <>
+          <Text>{info.item.content}</Text>
+          {info.item.imageUri && <Image source={{ uri: info.item.imageUri }} style={styles.imagePreview} />}
+        </>
+      )}
     </Card>
   );
 
   return (
     <View>
-      <Text category='h1' style={styles.title}>
-        Tareas
+      <Text style={styles.title}>
+        Tareas Creadas
       </Text>
-      <SafeAreaView style={styles.safeArea}> 
+      <SafeAreaView style={styles.safeArea}>
         <ScrollView style={styles.scrollView}>
           <List
             style={styles.container}
             contentContainerStyle={styles.contentContainer}
-            data={data}
+            data={taskList}
             renderItem={renderItem}
           />
         </ScrollView>
@@ -59,29 +172,40 @@ const Home = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    // maxHeight: '76vh',
-  },
-  contentContainer: {
-    // paddingHorizontal: 8,
-    // paddingVertical: 4,
-  },
-  item: {
-    // marginVertical: 4,
-  },
+  container: {},
+  contentContainer: {},
+  item: {},
   title: {
-    marginVertical: '20px'
-    // paddingTop: 0,
-    // marginTop: 0  
+    fontSize: 30,
+    fontWeight: 'bold',
+    marginVertical: 20,
+    textAlign: 'center'
   },
-  scrollView: {
-
-  },
+  scrollView: {},
   safeArea: {
     flex: 1,
     paddingTop: StatusBar.currentHeight,
-    maxHeight: '78vh'
-  }
+    maxHeight: '79vh'
+  },
+  inputTextStyle: {
+    minHeight: 80,
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  rowDirection: {
+    flexDirection: 'row',
+  },
+  h6Text: {
+    fontSize: 17
+  },
+  imagePreview: {
+    width: 400,
+    height: 400,
+    marginTop: 10,
+  },
 });
 
 export default Home;

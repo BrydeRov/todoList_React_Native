@@ -34,7 +34,6 @@ export default AppLayout = () => {
                 >
                     <BottomNavigationTab icon={PersonIcon} />
                     <BottomNavigationTab icon={BellIcon} />
-                    <BottomNavigationTab icon={EmailIcon} />
                 </BottomNavigation>
             </View>
         </>
